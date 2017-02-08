@@ -1,6 +1,6 @@
 ﻿ConvertFrom-StringData -StringData @"
 
-SearchingForItem_F0_In_F1_Type_F2 = Searching for Configuration Item '{0}' in Configuration Source '{1}' (Type {2}).
+SearchingForItem_F0_In_F1_Type_F2 = Searching for Configuration Item '{0}' in Configuration Source '{1}' (Type {2}, Count {3}).
 Item_F0_Found = Configuration Item '{0}' found.
 
 AddingSource_F0_Type_F1 = Adding Configuration Source '{0}' (Type {1}).

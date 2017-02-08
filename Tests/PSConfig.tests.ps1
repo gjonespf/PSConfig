@@ -153,5 +153,89 @@ Describe Get-ConfigurationItem {
     }
 }
 
+Describe Get-ConfigurationItemsFromMultipleSources {
+    Clear-ConfigurationSource
+    Add-DefaultConfigurationSource -InputObject @{
+        DefaultData = "Hello, Default World!"
+    }
+    Add-EnvironmentConfigurationSource
+
+    #Needed to mock
+    InModuleScope PSConfig {
+        Mock -ModuleName PSConfig -Verifiable Get-Content { return 'MockFileData = Hello, Mock World!' }
+        Mock -ModuleName PSConfig -Verifiable Test-Path { return $true }
+        Add-FileConfigurationSource -Path "C:\NotARealPath\Test.txt" -Format "StringData"
+        Assert-VerifiableMocks
+
+        It "Loads from multiple Configuration Sources" {
+            $Script:ConfigurationSources.Count | Should Be 3
+            (Get-ConfigurationSources).Count | Should Be 3
+        }
+
+        $data = $Script:ConfigurationSources[3].Data
+        Write-Host $data
+        It "Returns data when found in file configuration source" {
+            Get-ConfigurationItem -Key "MockFileData" -Verbose | Should BeExactly "Hello, Mock World!"
+        }
+        It "Returns data when found in default configuration source" {
+            Get-ConfigurationItem -Key "DefaultData" | Should BeExactly "Hello, Default World!"
+        }
+        It "Returns data when found in env configuration source" {
+            Get-ConfigurationItem -Key "PATH" | Should Not BeNullOrEmpty
+        }
+    }
+}
+
+Describe Get-ConfigurationItemFromMultipleSourcesWithOverride {
+    Clear-ConfigurationSource
+    
+    Add-DefaultConfigurationSource -InputObject @{
+        PATH = "Hello, Default World!"
+    }
+    It "Returns correct default data" {
+        Get-ConfigurationItem -Key "PATH" -Override -Verbose | Should BeExactly "Hello, Default World!"
+    }
+
+    Add-EnvironmentConfigurationSource
+    It "Returns path environment data overridden" {
+        Get-ConfigurationItem -Key "PATH" -Override -Verbose | Should Not BeExactly "Hello, Default World!"
+    }
+
+    Mock -ModuleName PSConfig Get-Content { return 'PATH = Path Override' }
+    Mock -ModuleName PSConfig Test-Path { return $true }
+    Add-FileConfigurationSource -Path "C:\NotARealPath\Test.txt" -Format "StringData"
+    It "Returns correctly overridden data when found in additional configuration source" {
+        Get-ConfigurationItem -Key "PATH" -Override -Verbose | Should BeExactly "Path Override"
+    }
+}
+
+Describe Get-FileConfigurationSourceItemWithBadChars {
+    Clear-ConfigurationSource
+    Mock -ModuleName PSConfig Get-Content { return 'MockFileData = Hello, Mock World!' }
+    Mock -ModuleName PSConfig Test-Path { return $true }
+    Add-FileConfigurationSource -Path "C:\NotARealPath\Test.txt" -Format "StringData"
+
+    It "Creates a Configuration Source from a string data file" {
+        InModuleScope PSConfig {
+            $Script:ConfigurationSources.Count | Should Be 1
+            $Script:ConfigurationSources[0].Name | Should BeExactly "C:\NotARealPath\Test.txt"
+            $Script:ConfigurationSources[0].Type | Should BeExactly "File/StringData"
+            $Script:ConfigurationSources[0].Data.PSObject.Properties.Count | Should Be 1
+            $Script:ConfigurationSources[0].Data.MockFileData | Should BeExactly "Hello, Mock World!"
+        }
+    }
+
+    Add-DefaultConfigurationSource -InputObject @{
+        DefaultData = "Hello, Default World!"
+    }
+    Add-EnvironmentConfigurationSource
+
+    It "Returns data when found in file configuration source" {
+        Get-ConfigurationItem -Key "MockFileData" | Should BeExactly "Hello, Mock World!"
+    }
+    It "Returns data when found in default configuration source" {
+        Get-ConfigurationItem -Key "DefaultData" | Should BeExactly "Hello, Default World!"
+    }
+}
 
 Remove-Module -Name "PSConfig"

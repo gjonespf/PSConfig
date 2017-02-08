@@ -10,6 +10,22 @@ $Script:r = $r
 
 # This array keeps track of all the configuration sources that have been added.
 $Script:ConfigurationSources = @()
+Function Get-ConfigurationSources {
+    <#
+    .SYNOPSIS
+    Gets list of current configuration sources.
+
+    .DESCRIPTION
+    Gets a list of all loaded configuration sources.
+
+    .OUTPUTS
+    Variant. The output type depends on the contents of the configuration data.
+    #>
+
+    Process {
+        return $Script:ConfigurationSources
+    }
+}
 
 Function Get-ConfigurationItem {
     <#
@@ -31,25 +47,32 @@ Function Get-ConfigurationItem {
     [CmdletBinding()]
     Param (
         [Parameter(Mandatory = $true)]
-        [string]$Key
+        [string]$Key,
+        [Parameter(Mandatory = $false)]
+        [switch]$Override
     )
 
     Process {
         $ReturnValue = $null
         foreach ($Item in $Script:ConfigurationSources) {
-            Write-Verbose -Message ([string]::Format($Script:r.SearchingForItem_F0_In_F1_Type_F2, $Key, $Item.Name, $Item.Type))
+
+            Write-Verbose -Message ([string]::Format($Script:r.SearchingForItem_F0_In_F1_Type_F2, $Key, $Item.Name, $Item.Type, $Item.Count))
             if ($Item.Type -eq "Environment") {
-                if (Test-Path -Path "Env:\$Key") {
+                if ((Test-Path -Path "Env:\$Key") -and (Get-Item -Path "Env:\$Key" -ErrorAction SilentlyContinue)) {
                     Write-Verbose -Message ([string]::Format($Script:r.Item_F0_Found, $Key))
                     $ReturnValue = (Get-Item -Path "Env:\$Key").Value
-                    break
+                    if(!($Override)) {
+                        break
+                    }
                 }
             } else {
                 $Property = $Item.Data.PSObject.Properties | Where-Object -FilterScript { $_.Name -eq $Key }
                 if ($Property) {
                     Write-Verbose -Message ([string]::Format($Script:r.Item_F0_Found, $Key))
                     $ReturnValue = $Property.Value
-                    break
+                    if(!($Override)) {
+                        break
+                    }
                 }
             }
         }
@@ -95,6 +118,7 @@ Function Add-DefaultConfigurationSource {
                 Name = "Default Values"
                 Type = "Default"
                 Data = $Item
+                Count = $Item.PSObject.Properties.Count
             }
 
             Write-Verbose -Message ([string]::Format($Script:r.AddingSource_F0_Type_F1, $NewSource.Name, $NewSource.Type))
@@ -157,6 +181,7 @@ Function Add-FileConfigurationSource {
                             Type = "File/StringData"
                             Name = $Item
                             Data = $Data
+                            Count = $Data.Count
                         } -ErrorAction Stop
                     } catch {
                         Write-Error -Exception $_.Exception -Message ([string]::Format($Script:r.CannotLoad_F0_Data_F1, "StringData", $Item))
@@ -171,6 +196,7 @@ Function Add-FileConfigurationSource {
                             Type = "File/Json"
                             Name = $Item
                             Data = $Data
+                            Count = $Data.Count
                         } -ErrorAction Stop
                     } catch {
                         Write-Error -Exception $_.Exception -Message ([string]::Format($Script:r.CannotLoad_F0_Data_F1, "Json", $Item))
@@ -185,6 +211,7 @@ Function Add-FileConfigurationSource {
                             Type = "File/Csv"
                             Name = $Item
                             Data = $Data
+                            Count = $Data.Count
                         } -ErrorAction Stop
                     } catch {
                         Write-Error -Exception $_.Exception -Message ([string]::Format($Script:r.CannotLoad_F0_Data_F1, "Csv", $Item))
@@ -219,6 +246,7 @@ Function Add-EnvironmentConfigurationSource {
             Type = "Environment"
             Name = "Environment Variables"
             Data = $null
+            Count = 0
         }
 
         Write-Verbose -Message ([string]::Format($Script:r.AddingSource_F0_Type_F1, $NewSource.Name, $NewSource.Type))
